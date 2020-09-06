@@ -6,7 +6,10 @@ import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.UnknownHostException;
+import java.util.Random;
 import java.util.Scanner;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 /**
  *
@@ -25,19 +28,24 @@ public class TCPS
 {
     public static final int PORT = 6666;
     public static ServerSocket serverSocket = null; // Server gets found
-    public static Socket openSocket = null;         // Server communicates with the client
+    //public static Socket openSocket = null;         // Server communicates with the client
+    public static ExecutorService executorService = Executors.newFixedThreadPool(10);
+    public static boolean running = true;
     
     public static Socket configureServer() throws UnknownHostException, IOException
     {
-        // get server's own IP address
-        String serverIP = InetAddress.getLocalHost().getHostAddress();
-        System.out.println("Server ip: " + serverIP);
-            
-        // create a socket at the predefined port
-        serverSocket = new ServerSocket(PORT);   
+        if (serverSocket == null) {
+            // get server's own IP address
+            String serverIP = InetAddress.getLocalHost().getHostAddress();
+            System.out.println("Server ip: " + serverIP);
+
+            // create a socket at the predefined port
+            serverSocket = new ServerSocket(PORT);
+        }
                     
         // Start listening and accepting requests on the serverSocket port, blocked until a request arrives
-        openSocket = serverSocket.accept();  
+
+        Socket openSocket = serverSocket.accept();
         System.out.println("Server accepts requests at: " + openSocket);      
         
         return openSocket;
@@ -64,10 +72,28 @@ public class TCPS
             {
                 out.println("Good bye, client!");
                 System.out.println("Log: " + request + " client!");
+                try
+                {
+                    openSocket.close();
+                    openSocket = null;
+                }
+                catch(Exception e)
+                {
+                    System.out.println("Could not close client's socket.");
+                }
                 break;
             }
             else
-            {        
+            {
+                // mimic heavy load
+                long millis = (long) (Math.random() * 10000);
+                System.out.println("Sleeps for " + millis + " ms");
+                try
+                {
+                    Thread.sleep(millis);
+                }
+                catch(Exception e){}
+                System.out.println("waking up.");
                 // server responses
                 response = new StringBuilder(request).reverse().toString();
                 out.println(response);   
@@ -78,24 +104,36 @@ public class TCPS
     }
     
     public static void main(String[] args) throws IOException 
-    {       
-        try
-        {
-            openSocket = configureServer();   
-            connectClient(openSocket);
+    {
+        while(running) {
+            try {
+                // call configureServer which blocks awaiting incoming request.
+                Socket openSocket = configureServer();
+
+                // Handle incoming request in separate thread - use ExecutorService interface. TODO get factory to return the ExecutorService instance.
+
+                executorService.submit(() -> {
+                    try {
+                        connectClient(openSocket);
+                    } catch (IOException e) {
+                        System.out.println(" Connection fails: " + e);
+                    } finally {
+                        try {
+                            openSocket.close();
+                            System.out.println("Connection to client closed");
+                        } catch (IOException e) {
+                            System.out.println("Socket could not be closed.");
+                        }
+                    }
+                });
+            } catch (Exception e) {
+                System.out.println(" System fails: " + e);
+            }
+
         }
-        catch(Exception e)
-        {
-            System.out.println(" Connection fails: " + e); 
-        }
-        finally
-        {    
-            openSocket.close();
-            System.out.println("Connection to client closed");
-            
-            serverSocket.close();
-            System.out.println("Server port closed");
-        }
-       
+        serverSocket.close();
+        System.out.println("Server port closed");
+        running = false;
+//WE NEED PROPER CLEANUP OF SOCKETS !!!!
     }
 }
