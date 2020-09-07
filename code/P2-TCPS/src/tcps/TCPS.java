@@ -107,33 +107,40 @@ public class TCPS
     {
         while(running) {
             try {
-                // call configureServer which blocks awaiting incoming request.
+                // call configureServer which blocks, awaiting incoming request.
                 Socket openSocket = configureServer();
 
                 // Handle incoming request in separate thread - use ExecutorService interface. TODO get factory to return the ExecutorService instance.
-
                 executorService.submit(() -> {
-                    try {
+                    try
+                    {
                         connectClient(openSocket);
-                    } catch (IOException e) {
+                    }
+                    catch (IOException e)
+                    {
                         System.out.println(" Connection fails: " + e);
-                    } finally {
-                        try {
+                    }
+                    finally
+                    {
+                        try
+                        {
                             openSocket.close();
                             System.out.println("Connection to client closed");
-                        } catch (IOException e) {
+                        }
+                        catch (IOException e)
+                        {
                             System.out.println("Socket could not be closed.");
                         }
                     }
                 });
-            } catch (Exception e) {
+            }
+            catch (Exception e)
+            {
                 System.out.println(" System fails: " + e);
             }
-
         }
         serverSocket.close();
         System.out.println("Server port closed");
         running = false;
-//WE NEED PROPER CLEANUP OF SOCKETS !!!!
     }
 }
