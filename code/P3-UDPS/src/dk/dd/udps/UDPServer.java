@@ -2,6 +2,8 @@ package dk.dd.udps;
 
 import java.io.IOException;
 import java.net.*;
+import java.nio.ByteBuffer;
+import java.util.ArrayList;
 
 /**
  *
@@ -11,9 +13,11 @@ public class UDPServer
 {
     private static final int serverPort = 7777;
     
-    // buffers for the messages
-    private static byte[] dataIn = new byte[128];
-    private static byte[] dataOut = new byte[128];  
+    // buffers for the messages - set length according to sockets receive buffer size. 64K max.
+    private static byte[] dataIn;
+    private static byte[] dataOut;
+    private static final int byteArraySize = 128;
+
     
     // In UDP messages are encapsulated in packages and sent over sockets
     private static DatagramPacket requestPacket;    
@@ -29,12 +33,18 @@ public class UDPServer
             String serverIP = InetAddress.getLocalHost().getHostAddress();
             // Opens socket for accepting requests
             serverSocket = new DatagramSocket(serverPort);
+
             while(true)
             {
                System.out.println("Server " + serverIP + " running ...");  
                messageIn = receiveRequest();
                if (messageIn.equals("stop")) break;
-               messageOut = processRequest(messageIn);
+               else if (messageIn.contains("-image"))
+               {
+                   messageOut = receiveImage(Integer.valueOf(messageIn.substring(messageIn.indexOf(',')+1)));
+               }
+               else // default
+                messageOut = processRequest(messageIn);
                sendResponse(messageOut);
             } 
         }
@@ -48,10 +58,26 @@ public class UDPServer
             System.out.println("Server port closed");
         }
     }
-    
+
+    private static String receiveImage(Integer numPackets)  throws IOException
+    {
+        ArrayList<byte[]> file = new ArrayList<>(numPackets);
+        dataIn = new byte[byteArraySize];
+        for(int i = 0; i < numPackets; i++) {
+            requestPacket = new DatagramPacket(dataIn, dataIn.length);
+
+            serverSocket.receive(requestPacket); // blocks until received.
+            file.add(requestPacket.getData());
+
+        }
+        return file.size() + " packets received";
+    }
+
     public static String receiveRequest() throws IOException
     {
+          dataIn = new byte[serverSocket.getReceiveBufferSize()];
           requestPacket = new DatagramPacket(dataIn, dataIn.length);
+
           serverSocket.receive(requestPacket);
           String message = new String(requestPacket.getData(), 0, requestPacket.getLength());
           System.out.println("Request: " + message);   
@@ -67,7 +93,7 @@ public class UDPServer
     {
         InetAddress clientIP;
         int clientPort;
-    
+        dataOut = new byte[serverSocket.getReceiveBufferSize()];
         clientIP = requestPacket.getAddress();
         clientPort = requestPacket.getPort();
         System.out.println("Client port: " + clientPort);
